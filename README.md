@@ -1,1 +1,1 @@
-# go-musthave-diploma-tpl
+# go-musthave-shortener-tpl

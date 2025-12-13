@@ -1,0 +1,33 @@
+package main
+
+import (
+	"context"
+	"log"
+
+	"gophermart/cmd/accrual"
+	"gophermart/cmd/gophermart"
+	"gophermart/internal/app"
+)
+
+func main() {
+	ctx := context.Background()
+
+	srvc, err := app.Setup()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	go func() {
+		if err := accrual.Run(srvc); err != nil {
+			log.Fatal(err)
+		}
+	}()
+	
+	go func () {
+		if err := gophermart.Run(srvc); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	<-ctx.Done()
+}

@@ -1,17 +1,16 @@
-package gophermart
+package accrual
 
 import (
+	"gophermart/internal/app"
+	accrual "gophermart/internal/handler/accrual"
+	"gophermart/internal/service"
 	"log"
 	"net/http"
-
-	"gophermart/internal/app"
-	mart "gophermart/internal/handler/gophermart"
-	"gophermart/internal/service"
 )
 
 func Run(srvc *service.Service) error {
-	martHandler := mart.NewGophermart(srvc)
-	return http.ListenAndServe(srvc.Config.RunAddr, martHandler.Router())
+	accrualHandler := accrual.NewAccrual(srvc)
+	return http.ListenAndServe(srvc.Config.AccrualAddr, accrualHandler.Router())
 }
 
 func main() {
