@@ -1,4 +1,4 @@
-package gophermart
+package main
 
 import (
 	"log"
