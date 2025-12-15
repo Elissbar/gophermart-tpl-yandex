@@ -132,3 +132,14 @@ func (db *DBStorage) GetOrders(ctx context.Context) ([]model.Order, error) {
 
 	return orders, nil
 }
+
+func (db *DBStorage) GetBalance(ctx context.Context, userID string) (model.Balance, error) {
+	row := db.DB.QueryRowContext(ctx, "SELECT current, withdrawn FROM orders WHERE user_id=$1", userID)
+
+	var balance model.Balance
+	if err := row.Scan(&balance.Current, &balance.Withdrawn); err != nil {
+		return model.Balance{}, fmt.Errorf("error get balance from DB: %w", err)
+	}
+
+	return balance, nil
+}
