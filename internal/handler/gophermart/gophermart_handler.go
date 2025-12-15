@@ -36,7 +36,7 @@ func (h *GophermartHandler) Router() chi.Router {
 
 		r.Post("/orders", h.UploadOrderNumber)
 		r.Get("/orders", h.GetOrders)
-		r.Get("/api/user/balance", h.GetBalance)
+		// r.Get("/api/user/balance", h.GetBalance)
 	})
 	return r
 }
@@ -171,19 +171,19 @@ func (h *GophermartHandler) GetOrders(rw http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *GophermartHandler) GetBalance(rw http.ResponseWriter, r *http.Request) {
-	rw.Header().Set("Content-Type", "application/json")
+// func (h *GophermartHandler) GetBalance(rw http.ResponseWriter, r *http.Request) {
+// 	rw.Header().Set("Content-Type", "application/json")
 
-	userID := r.Context().Value(internal.UserIDKey).(string)
-	balance, err := h.service.Storage.GetBalance(r.Context(), userID)
-	if err != nil {
-		http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
+// 	userID := r.Context().Value(internal.UserIDKey).(string)
+// 	balance, err := h.service.Storage.GetBalance(r.Context(), userID)
+// 	if err != nil {
+// 		http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)
+// 		return
+// 	}
 
-	enc := json.NewEncoder(rw)
-	if err := enc.Encode(balance); err != nil {
-		http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-}
+// 	enc := json.NewEncoder(rw)
+// 	if err := enc.Encode(balance); err != nil {
+// 		http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)
+// 		return
+// 	}
+// }
