@@ -68,6 +68,7 @@ func (db *DBStorage) RegisterUser(ctx context.Context, user model.User) (string,
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
 			return "", internal.ErrLoginExists
 		}
+		return "", fmt.Errorf("error register user: %w", err)
 	}
 	return userID, nil
 }
@@ -75,7 +76,7 @@ func (db *DBStorage) RegisterUser(ctx context.Context, user model.User) (string,
 func (db *DBStorage) GetUser(ctx context.Context, login string) (*model.User, error) {
 	row := db.DB.QueryRowContext(ctx, "SELECT login, password_hash FROM users WHERE login=$1", login)
 	var existedUser model.User
-	
+
 	if err := row.Scan(&existedUser.Login, &existedUser.Password); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, internal.ErrUserNotFound
@@ -83,4 +84,51 @@ func (db *DBStorage) GetUser(ctx context.Context, login string) (*model.User, er
 		return nil, fmt.Errorf("error get user from DB: %w", err)
 	}
 	return &existedUser, nil
+}
+
+func (db *DBStorage) UploadNumber(ctx context.Context, userID string, number string) error {
+	var existingUserID string
+	err := db.DB.QueryRowContext(ctx, "SELECT user_id FROM orders WHERE number=$1", number).Scan(&existingUserID)
+	if err == nil {
+		if existingUserID == userID {
+			return internal.ErrOrderAlreadyUploadedByUser
+		}
+		return internal.ErrOrderUploadConflict
+	}
+
+	_, err = db.DB.ExecContext(ctx, "INSERT INTO orders (user_id, number) VALUES ($1, $2)", userID, number)
+	if err != nil {
+		var pgErr *pq.Error
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+			return internal.ErrOrderUploadConflict
+		}
+		return fmt.Errorf("error upload number to DB: %w", err)
+	}
+	return nil
+}
+
+func (db *DBStorage) GetOrders(ctx context.Context) ([]model.Order, error) {
+	rows, err := db.DB.QueryContext(ctx, "SELECT number, status, accrual, uploaded_at FROM orders")
+	if err != nil {
+		return nil, fmt.Errorf("error get orders from DB: %w", err)
+	}
+	defer rows.Close()
+
+	var orders []model.Order
+	for rows.Next() {
+		var order model.Order
+
+		err = rows.Scan(
+			&order.Number, 
+			&order.Status, 
+			&order.Accrual, 
+			&order.UploadedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("error scan order from DB: %w", err)
+		}
+		orders = append(orders, order)
+	}
+
+	return orders, nil
 }

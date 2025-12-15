@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"gophermart/internal"
 	"gophermart/internal/config"
 	"gophermart/internal/repository"
 	"net/http"
@@ -31,10 +32,7 @@ func (s *Service) CheckHashedPass(hashedPass, pass string) bool {
 }
 
 func (s *Service) GenerateAuthToken(userID, jwtSecret string) (*http.Cookie, error) {
-	claim := struct {
-		UserID string
-		jwt.StandardClaims
-	}{UserID: userID}
+	claim := internal.Claims{UserID: userID}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claim)
 	tokenString, err := token.SignedString([]byte(jwtSecret))
@@ -43,4 +41,58 @@ func (s *Service) GenerateAuthToken(userID, jwtSecret string) (*http.Cookie, err
 	}
 
 	return &http.Cookie{Name: "user_id", Value: tokenString, HttpOnly: true}, nil
+}
+
+func (s *Service) ValidateAuthToken(tokenString, jwtSecret string) (string, error) {
+	claims := &internal.Claims{}
+
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+		}
+		return []byte(jwtSecret), nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("error parse token: %w", err)
+	}
+
+	if !token.Valid {
+		return "", fmt.Errorf("invalid token")
+	}
+
+	if claims.UserID == "" {
+		return "", fmt.Errorf("user_id is empty")
+	}
+
+	return claims.UserID, nil
+}
+
+func (s *Service) ValidLuhn(number string) bool {
+	n := len(number)
+	if n < 2 {
+		return false
+	}
+
+	sum := 0
+	isSecond := false
+
+	for i := n - 1; i >= 0; i-- {
+		d := int(number[i] - '0')
+
+		if d < 0 || d > 9 {
+			return false
+		}
+
+		if isSecond {
+			d = d * 2
+			if d > 9 {
+				d = d - 9
+			}
+		}
+
+		sum += d
+		isSecond = !isSecond
+	}
+
+	return sum%10 == 0
 }
