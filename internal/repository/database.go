@@ -107,8 +107,12 @@ func (db *DBStorage) UploadNumber(ctx context.Context, userID string, number str
 	return nil
 }
 
-func (db *DBStorage) GetOrders(ctx context.Context) ([]model.Order, error) {
-	rows, err := db.DB.QueryContext(ctx, "SELECT number, status, accrual, uploaded_at FROM orders")
+func (db *DBStorage) GetOrders(ctx context.Context, userID string) ([]model.Order, error) {
+	rows, err := db.DB.QueryContext(
+		ctx, 
+		"SELECT number, status, accrual, uploaded_at FROM orders WHERE user_id = $1 ORDER BY uploaded_at DESC",
+        userID,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("error get orders from DB: %w", err)
 	}

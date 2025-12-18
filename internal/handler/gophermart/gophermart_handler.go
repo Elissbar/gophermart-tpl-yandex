@@ -153,7 +153,9 @@ func (h *GophermartHandler) UploadOrderNumber(rw http.ResponseWriter, r *http.Re
 func (h *GophermartHandler) GetOrders(rw http.ResponseWriter, r *http.Request) {
 	rw.Header().Set("Content-Type", "application/json")
 
-	orders, err := h.service.Storage.GetOrders(r.Context())
+	userID := r.Context().Value(internal.UserIDKey).(string)
+
+	orders, err := h.service.Storage.GetOrders(r.Context(), userID)
 	if err != nil {
 		http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)
 		return
