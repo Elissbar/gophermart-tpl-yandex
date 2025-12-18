@@ -36,7 +36,7 @@ func (h *GophermartHandler) Router() chi.Router {
 
 		r.Post("/orders", h.UploadOrderNumber)
 		r.Get("/orders", h.GetOrders)
-		// r.Get("/balance", h.GetBalance)
+		r.Get("/balance", h.GetBalance)
 	})
 	return r
 }
