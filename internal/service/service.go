@@ -7,7 +7,7 @@ import (
 	"gophermart/internal/repository"
 	"net/http"
 
-	"github.com/golang-jwt/jwt/v4"
+	"github.com/golang-jwt/jwt/v5"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -53,14 +53,17 @@ func (s *Service) ValidateAuthToken(tokenString, jwtSecret string) (string, erro
 		return []byte(jwtSecret), nil
 	})
 	if err != nil {
+		fmt.Println("Error: ", err)
 		return "", fmt.Errorf("error parse token: %w", err)
 	}
 
 	if !token.Valid {
+		fmt.Println("Token: ", token)
 		return "", fmt.Errorf("invalid token")
 	}
 
 	if claims.UserID == "" {
+		fmt.Println("claims.UserID:", claims.UserID)
 		return "", fmt.Errorf("user_id is empty")
 	}
 

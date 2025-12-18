@@ -74,10 +74,10 @@ func (db *DBStorage) RegisterUser(ctx context.Context, user model.User) (string,
 }
 
 func (db *DBStorage) GetUser(ctx context.Context, login string) (*model.User, error) {
-	row := db.DB.QueryRowContext(ctx, "SELECT login, password_hash FROM users WHERE login=$1", login)
+	row := db.DB.QueryRowContext(ctx, "SELECT id, login, password_hash FROM users WHERE login=$1", login)
 	var existedUser model.User
 
-	if err := row.Scan(&existedUser.Login, &existedUser.Password); err != nil {
+	if err := row.Scan(&existedUser.ID, &existedUser.Login, &existedUser.Password); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, internal.ErrUserNotFound
 		}

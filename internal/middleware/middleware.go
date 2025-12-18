@@ -25,7 +25,7 @@ func (m *Middleware) Auth(next http.Handler) http.Handler {
 			var userID string
 			userID, err = m.srvc.ValidateAuthToken(cookie.Value, m.srvc.Config.JWTSecret)
 			if err != nil {
-				http.Error(rw, "Invalid token", http.StatusUnauthorized)
+				http.Error(rw, "Invalid token: "+err.Error(), http.StatusUnauthorized)
 				return
 			}
 
