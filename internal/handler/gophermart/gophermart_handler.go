@@ -174,8 +174,8 @@ func (h *GophermartHandler) GetOrders(rw http.ResponseWriter, r *http.Request) {
 func (h *GophermartHandler) GetBalance(rw http.ResponseWriter, r *http.Request) {
 	rw.Header().Set("Content-Type", "application/json")
 
-	// userID := r.Context().Value(internal.UserIDKey).(string)
-	balance, err := h.service.Storage.GetBalance(r.Context())
+	userID := r.Context().Value(internal.UserIDKey).(string)
+	balance, err := h.service.Storage.GetBalance(r.Context(), userID)
 	if err == nil || errors.Is(err, internal.ErrNoRows) {
 		enc := json.NewEncoder(rw)
 		if err := enc.Encode(balance); err != nil {
