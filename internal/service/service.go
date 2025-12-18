@@ -40,7 +40,14 @@ func (s *Service) GenerateAuthToken(userID, jwtSecret string) (*http.Cookie, err
 		return &http.Cookie{}, fmt.Errorf("error create uuid: %w", err)
 	}
 
-	return &http.Cookie{Name: "user_id", Value: tokenString, HttpOnly: true}, nil
+	return &http.Cookie{
+		Name: "user_id", 
+		Value: tokenString, 
+		HttpOnly: true,
+		Path:     "/", 
+    	MaxAge:   24*60*60,
+	}, 
+	nil
 }
 
 func (s *Service) ValidateAuthToken(tokenString, jwtSecret string) (string, error) {
