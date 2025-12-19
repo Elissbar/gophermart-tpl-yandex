@@ -137,16 +137,16 @@ func (db *DBStorage) GetOrders(ctx context.Context, userID string) ([]model.Orde
 	return orders, nil
 }
 
-func (db *DBStorage) GetBalance(ctx context.Context, userID string) (model.Balance, error) {
-	row := db.DB.QueryRowContext(ctx, "SELECT current, withdrawn FROM balances")
+// func (db *DBStorage) GetBalance(ctx context.Context, userID string) (model.Balance, error) {
+// 	row := db.DB.QueryRowContext(ctx, "SELECT current, withdrawn FROM balances")
 
-	var balance model.Balance
-	if err := row.Scan(&balance.Current, &balance.Withdrawn); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return model.Balance{}, internal.ErrNoRows
-		}
-		return model.Balance{}, fmt.Errorf("error get balance from DB: %w", err)
-	}
+// 	var balance model.Balance
+// 	if err := row.Scan(&balance.Current, &balance.Withdrawn); err != nil {
+// 		if errors.Is(err, sql.ErrNoRows) {
+// 			return model.Balance{}, internal.ErrNoRows
+// 		}
+// 		return model.Balance{}, fmt.Errorf("error get balance from DB: %w", err)
+// 	}
 
-	return balance, nil
-}
+// 	return balance, nil
+// }
