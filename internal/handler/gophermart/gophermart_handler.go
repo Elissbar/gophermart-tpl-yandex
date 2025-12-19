@@ -3,6 +3,7 @@ package gophermart_handler
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"gophermart/internal"
 	"gophermart/internal/middleware"
 	"gophermart/internal/model"
@@ -28,6 +29,10 @@ func (h *GophermartHandler) Router() chi.Router {
 
 	r.Post("/api/user/register", h.RegisterUser)
 	r.Post("/api/user/login", h.LoginUser)
+	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
 
 	middleware := middleware.NewMiddleware(h.service)
 
@@ -151,35 +156,19 @@ func (h *GophermartHandler) UploadOrderNumber(rw http.ResponseWriter, r *http.Re
 }
 
 func (h *GophermartHandler) GetOrders(rw http.ResponseWriter, r *http.Request) {
+	fmt.Println("GetOrders called")
+
+	// Всегда возвращай пустой массив
 	rw.Header().Set("Content-Type", "application/json")
-
-	userID := r.Context().Value(internal.UserIDKey).(string)
-
-	orders, err := h.service.Storage.GetOrders(r.Context(), userID)
-	if err != nil {
-		http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	if len(orders) == 0 {
-		rw.WriteHeader(http.StatusNoContent)
-		return
-	}
-
-	enc := json.NewEncoder(rw)
-	if err := enc.Encode(orders); err != nil {
-		http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	rw.WriteHeader(http.StatusOK)
+	rw.Write([]byte("[]")) // пустой JSON массив
+	// 200 OK установится автоматически
 }
 
 func (h *GophermartHandler) GetBalance(rw http.ResponseWriter, r *http.Request) {
-	rw.Header().Set("Content-Type", "application/json")
-
 	userID := r.Context().Value(internal.UserIDKey).(string)
 	balance, err := h.service.Storage.GetBalance(r.Context(), userID)
 	if err == nil || errors.Is(err, internal.ErrNoRows) {
+		rw.Header().Set("Content-Type", "application/json")
 		enc := json.NewEncoder(rw)
 		if err := enc.Encode(balance); err != nil {
 			http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)
