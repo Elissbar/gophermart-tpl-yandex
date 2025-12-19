@@ -18,10 +18,26 @@ func NewMiddleware(srvc *service.Service) *Middleware {
 }
 
 func (m *Middleware) Auth(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-        // ВРЕМЕННО: пропускай все запросы
-        userID := "test-user-id"
-        ctx := context.WithValue(r.Context(), internal.UserIDKey, userID)
-        next.ServeHTTP(rw, r.WithContext(ctx))
-    })
+	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		// cookie, err := r.Cookie("user_id")
+
+		// if err == nil && cookie.Value != "" {
+		// 	var userID string
+		// 	userID, err = m.srvc.ValidateAuthToken(cookie.Value, m.srvc.Config.JWTSecret)
+		// 	if err != nil {
+		// 		http.Error(rw, "Invalid token: "+err.Error(), http.StatusUnauthorized)
+		// 		return
+		// 	}
+
+		// 	ctx := context.WithValue(r.Context(), internal.UserIDKey, userID)
+		// 	next.ServeHTTP(rw, r.WithContext(ctx))
+		// 	return
+		// }
+		// http.Error(rw, "Unauthorized", http.StatusUnauthorized)
+
+		// ВРЕМЕННО: пропускай все запросы
+		userID := "1"
+		ctx := context.WithValue(r.Context(), internal.UserIDKey, userID)
+		next.ServeHTTP(rw, r.WithContext(ctx))
+	})
 }
