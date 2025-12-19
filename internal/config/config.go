@@ -11,7 +11,7 @@ type Config struct {
 	RunAddr     string `env:"RUN_ADDRESS"`
 	DBURI       string `env:"DATABASE_URI"`
 	AccrualAddr string `env:"ACCRUAL_SYSTEM_ADDRESS"`
-	JWTSecret   string `env:"JWTSecret"`
+	JWTSecret   string // `env:"-"`
 }
 
 func NewConfig() (*Config, error) {
@@ -37,8 +37,12 @@ func NewConfig() (*Config, error) {
 	if cfg.AccrualAddr == "" {
 		cfg.AccrualAddr = accrualAddr
 	}
-	if cfg.JWTSecret == "" {
+
+	if cfg.JWTSecret == "" && jwtSecret != "" {
 		cfg.JWTSecret = jwtSecret
+	}
+	if cfg.JWTSecret == "" && jwtSecret == "" {
+		cfg.JWTSecret = "default-secret-key-for-development"
 	}
 
 	return &cfg, nil
