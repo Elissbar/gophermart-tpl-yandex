@@ -3,7 +3,6 @@ package gophermart_handler
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"gophermart/internal"
 	"gophermart/internal/middleware"
 	"gophermart/internal/model"
@@ -156,12 +155,10 @@ func (h *GophermartHandler) UploadOrderNumber(rw http.ResponseWriter, r *http.Re
 }
 
 func (h *GophermartHandler) GetOrders(rw http.ResponseWriter, r *http.Request) {
-	fmt.Println("GetOrders called")
-
-	// Всегда возвращай пустой массив
-	rw.Header().Set("Content-Type", "application/json")
-	rw.Write([]byte("[]")) // пустой JSON массив
-	// 200 OK установится автоматически
+    // ВРЕМЕННО: сразу возвращай пустой массив
+    rw.Header().Set("Content-Type", "application/json")
+    rw.Write([]byte("[]"))
+    return
 }
 
 func (h *GophermartHandler) GetBalance(rw http.ResponseWriter, r *http.Request) {

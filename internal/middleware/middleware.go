@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"context"
-	"fmt"
 	"gophermart/internal"
 	"gophermart/internal/service"
 	"net/http"
@@ -21,28 +20,39 @@ func NewMiddleware(srvc *service.Service) *Middleware {
 
 func (m *Middleware) Auth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		// ВРЕМЕННО: логируем все запросы
-		fmt.Printf("[%s] %s\n", time.Now().Format("15:04:05"), r.URL.Path)
+		// Таймаут на всю авторизацию
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
 
 		cookie, err := r.Cookie("user_id")
 		if err != nil {
-			fmt.Printf("  No cookie: %v\n", err)
 			http.Error(rw, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
-		fmt.Printf("  Cookie length: %d\n", len(cookie.Value))
+		// Канал для асинхронной проверки
+		userIDChan := make(chan string, 1)
+		errChan := make(chan error, 1)
 
-		userID, err := m.srvc.ValidateAuthToken(cookie.Value, m.srvc.Config.JWTSecret)
-		if err != nil {
-			fmt.Printf("  Token error: %v\n", err)
+		go func() {
+			userID, err := m.srvc.ValidateAuthToken(cookie.Value, m.srvc.Config.JWTSecret)
+			if err != nil {
+				errChan <- err
+				return
+			}
+			userIDChan <- userID
+		}()
+
+		select {
+		case <-ctx.Done():
+			http.Error(rw, "Authorization timeout", http.StatusRequestTimeout)
+			return
+		case <-errChan:
 			http.Error(rw, "Invalid token", http.StatusUnauthorized)
 			return
+		case userID := <-userIDChan:
+			ctx2 := context.WithValue(r.Context(), internal.UserIDKey, userID)
+			next.ServeHTTP(rw, r.WithContext(ctx2))
 		}
-
-		fmt.Printf("  UserID: %s\n", userID)
-
-		ctx := context.WithValue(r.Context(), internal.UserIDKey, userID)
-		next.ServeHTTP(rw, r.WithContext(ctx))
 	})
 }

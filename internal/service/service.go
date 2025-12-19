@@ -1,11 +1,13 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"gophermart/internal"
 	"gophermart/internal/config"
 	"gophermart/internal/repository"
 	"net/http"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"go.uber.org/zap"
@@ -41,16 +43,19 @@ func (s *Service) GenerateAuthToken(userID, jwtSecret string) (*http.Cookie, err
 	}
 
 	return &http.Cookie{
-		Name: "user_id", 
-		Value: tokenString, 
-		HttpOnly: true,
-		Path:     "/", 
-    	MaxAge:   24*60*60,
-	}, 
-	nil
+			Name:     "user_id",
+			Value:    tokenString,
+			HttpOnly: true,
+			Path:     "/",
+			MaxAge:   24 * 60 * 60,
+		},
+		nil
 }
 
 func (s *Service) ValidateAuthToken(tokenString, jwtSecret string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
 	claims := &internal.Claims{}
 
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(t *jwt.Token) (interface{}, error) {
@@ -59,6 +64,13 @@ func (s *Service) ValidateAuthToken(tokenString, jwtSecret string) (string, erro
 		}
 		return []byte(jwtSecret), nil
 	})
+
+	select {
+    case <-ctx.Done():
+        return "", fmt.Errorf("token validation timeout")
+    default:
+    }
+	
 	if err != nil {
 		fmt.Println("Error: ", err)
 		return "", fmt.Errorf("error parse token: %w", err)
