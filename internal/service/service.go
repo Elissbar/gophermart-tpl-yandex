@@ -51,31 +51,30 @@ func (s *Service) GenerateAuthToken(userID, jwtSecret string) (*http.Cookie, err
 }
 
 func (s *Service) ValidateAuthToken(tokenString, jwtSecret string) (string, error) {
-	// claims := &internal.Claims{}
+	claims := &internal.Claims{}
 
-	// token, err := jwt.ParseWithClaims(tokenString, claims, func(t *jwt.Token) (interface{}, error) {
-	// 	if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-	// 		return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
-	// 	}
-	// 	return []byte(jwtSecret), nil
-	// })
-	// if err != nil {
-	// 	fmt.Println("Error: ", err)
-	// 	return "", fmt.Errorf("error parse token: %w", err)
-	// }
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+		}
+		return []byte(jwtSecret), nil
+	})
+	if err != nil {
+		fmt.Println("Error: ", err)
+		return "", fmt.Errorf("error parse token: %w", err)
+	}
 
-	// if !token.Valid {
-	// 	fmt.Println("Token: ", token)
-	// 	return "", fmt.Errorf("invalid token")
-	// }
+	if !token.Valid {
+		fmt.Println("Token: ", token)
+		return "", fmt.Errorf("invalid token")
+	}
 
-	// if claims.UserID == "" {
-	// 	fmt.Println("claims.UserID:", claims.UserID)
-	// 	return "", fmt.Errorf("user_id is empty")
-	// }
+	if claims.UserID == "" {
+		fmt.Println("claims.UserID:", claims.UserID)
+		return "", fmt.Errorf("user_id is empty")
+	}
 
-	// return claims.UserID, nil
-	return "test-user-id", nil
+	return claims.UserID, nil
 }
 
 func (s *Service) ValidLuhn(number string) bool {

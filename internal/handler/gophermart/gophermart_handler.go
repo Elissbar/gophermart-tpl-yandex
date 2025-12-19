@@ -40,7 +40,7 @@ func (h *GophermartHandler) Router() chi.Router {
 
 		r.Post("/orders", h.UploadOrderNumber)
 		r.Get("/orders", h.GetOrders)
-		// r.Get("/balance", h.GetBalance)
+		r.Get("/balance", h.GetBalance)
 	})
 	return r
 }
@@ -155,23 +155,38 @@ func (h *GophermartHandler) UploadOrderNumber(rw http.ResponseWriter, r *http.Re
 }
 
 func (h *GophermartHandler) GetOrders(rw http.ResponseWriter, r *http.Request) {
-	// ВРЕМЕННО: сразу возвращай пустой массив
+	userID := r.Context().Value(internal.UserIDKey).(string)
+
+	orders, err := h.service.Storage.GetOrders(r.Context(), userID)
+	if err != nil {
+		http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if len(orders) == 0 {
+		rw.WriteHeader(http.StatusNoContent)
+		return
+	}
+
 	rw.Header().Set("Content-Type", "application/json")
-	rw.Write([]byte("[]"))
-	return
+	enc := json.NewEncoder(rw)
+	if err := enc.Encode(orders); err != nil {
+		http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
-// func (h *GophermartHandler) GetBalance(rw http.ResponseWriter, r *http.Request) {
-// 	userID := r.Context().Value(internal.UserIDKey).(string)
-// 	balance, err := h.service.Storage.GetBalance(r.Context(), userID)
-// 	if err == nil || errors.Is(err, internal.ErrNoRows) {
-// 		rw.Header().Set("Content-Type", "application/json")
-// 		enc := json.NewEncoder(rw)
-// 		if err := enc.Encode(balance); err != nil {
-// 			http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)
-// 			return
-// 		}
-// 		return
-// 	}
-// 	http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)
-// }
+func (h *GophermartHandler) GetBalance(rw http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(internal.UserIDKey).(string)
+	balance, err := h.service.Storage.GetBalance(r.Context(), userID)
+	if err == nil || errors.Is(err, internal.ErrNoRows) {
+		rw.Header().Set("Content-Type", "application/json")
+		enc := json.NewEncoder(rw)
+		if err := enc.Encode(balance); err != nil {
+			http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		return
+	}
+	http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)
+}
