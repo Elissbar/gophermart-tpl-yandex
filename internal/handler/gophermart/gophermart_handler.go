@@ -155,10 +155,25 @@ func (h *GophermartHandler) UploadOrderNumber(rw http.ResponseWriter, r *http.Re
 }
 
 func (h *GophermartHandler) GetOrders(rw http.ResponseWriter, r *http.Request) {
-    // ВРЕМЕННО: сразу возвращай пустой массив
-    rw.Header().Set("Content-Type", "application/json")
-    rw.Write([]byte("[]"))
-    return
+	userID := r.Context().Value(internal.UserIDKey).(string)
+
+	orders, err := h.service.Storage.GetOrders(r.Context(), userID)
+	if err != nil {
+		http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if len(orders) == 0 {
+		rw.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	rw.Header().Set("Content-Type", "application/json")
+	enc := json.NewEncoder(rw)
+	if err := enc.Encode(orders); err != nil {
+		http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func (h *GophermartHandler) GetBalance(rw http.ResponseWriter, r *http.Request) {
