@@ -25,8 +25,8 @@ func NewConfig() (*Config, error) {
 	flag.StringVar(&runAddr, "a", ":8080", ":<port>")
 	flag.StringVar(&accrualAddr, "r", ":8081", ":<port>")
 	flag.StringVar(&jwtSecret, "s", "jwt secret", "")
-	flag.StringVar(&dbURI, "d", "", "Database connection string")
-	// flag.StringVar(&dbURI, "d", "postgres://postgres:12345@localhost:5432/gophermart?sslmode=disable", "Database connection string")
+	// flag.StringVar(&dbURI, "d", "", "Database connection string")
+	flag.StringVar(&dbURI, "d", "postgres://postgres:12345@localhost:5432/gophermart?sslmode=disable", "Database connection string")
 
 	if cfg.RunAddr == "" {
 		cfg.RunAddr = runAddr

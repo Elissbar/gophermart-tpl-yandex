@@ -10,5 +10,8 @@ type Storage interface {
 	GetUser(ctx context.Context, login string) (*model.User, error)
 	UploadNumber(ctx context.Context, userID string, number string) error
 	GetOrders(ctx context.Context, userID string) ([]model.Order, error)
+	GetOrder(ctx context.Context, number string) (*model.Order, error)
 	GetBalance(ctx context.Context, userID string) (model.Balance, error)
+	PostWithdraw(ctx context.Context, userID string, withdraw model.Withdraw) error
+	GetWithdrawals(ctx context.Context, userID string) ([]model.Withdraw, error)
 }

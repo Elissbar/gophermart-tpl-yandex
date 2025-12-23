@@ -137,8 +137,21 @@ func (db *DBStorage) GetOrders(ctx context.Context, userID string) ([]model.Orde
 	return orders, nil
 }
 
+func (db *DBStorage) GetOrder(ctx context.Context, number string) (*model.Order, error) {
+	row := db.DB.QueryRowContext(ctx, "SELECT number, status, accrual FROM orders WHERE number=$1", number)
+
+	var order model.Order
+	if err := row.Scan(&order.Number, &order.Status, &order.Accrual); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, internal.ErrNoRows
+		}
+		return nil, fmt.Errorf("error get order from DB: %w", err)
+	}
+	return &order, nil
+}
+
 func (db *DBStorage) GetBalance(ctx context.Context, userID string) (model.Balance, error) {
-	row := db.DB.QueryRowContext(ctx, "SELECT current, withdrawn FROM balances")
+	row := db.DB.QueryRowContext(ctx, "SELECT current, withdrawn FROM balances WHERE user_id=$1", userID)
 
 	var balance model.Balance
 	if err := row.Scan(&balance.Current, &balance.Withdrawn); err != nil {
@@ -149,4 +162,45 @@ func (db *DBStorage) GetBalance(ctx context.Context, userID string) (model.Balan
 	}
 
 	return balance, nil
+}
+
+func (db *DBStorage) PostWithdraw(ctx context.Context, userID string, withdraw model.Withdraw) error {
+	_, err := db.DB.ExecContext(
+		ctx, 
+		"INSERT INTO withdrawals (user_id, order_number, sum) VALUES ($1, $2, $3)", 
+		userID, withdraw.Order, withdraw.Sum,
+	)
+	if err != nil {
+		return fmt.Errorf("error insert withdraw to DB: %w", err)
+	}
+	return nil
+}
+
+func (db *DBStorage) GetWithdrawals(ctx context.Context, userID string) ([]model.Withdraw, error) {
+	rows, err := db.DB.QueryContext(
+		ctx, 
+		"SELECT order_number, sum, processed_at FROM withdrawals WHERE user_id = $1 ORDER BY processed_at DESC",
+        userID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error get withdrawals from DB: %w", err)
+	}
+	defer rows.Close()
+
+	var withdrawals []model.Withdraw
+	for rows.Next() {
+		var withdrawn model.Withdraw
+
+		err = rows.Scan(
+			&withdrawn.Order,
+			&withdrawn.Sum,
+			&withdrawn.ProcessedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("error scan withdrawn from DB: %w", err)
+		}
+		withdrawals = append(withdrawals, withdrawn)
+	}
+
+	return withdrawals, nil
 }

@@ -3,6 +3,7 @@ package gophermart_handler
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"gophermart/internal"
 	"gophermart/internal/middleware"
 	"gophermart/internal/model"
@@ -41,7 +42,12 @@ func (h *GophermartHandler) Router() chi.Router {
 		r.Post("/orders", h.UploadOrderNumber)
 		r.Get("/orders", h.GetOrders)
 		r.Get("/balance", h.GetBalance)
+		r.Post("/balance/withdraw", h.PostWithdraw)
+		r.Get("/withdrawals", h.GetWithdrawals)
 	})
+
+	r.Get("/api/orders/{number}", h.GetOrderByNumber)
+
 	return r
 }
 
@@ -189,4 +195,78 @@ func (h *GophermartHandler) GetBalance(rw http.ResponseWriter, r *http.Request) 
 		return
 	}
 	http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)
+}
+
+func (h *GophermartHandler) PostWithdraw(rw http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(internal.UserIDKey).(string)
+
+	var withdraw model.Withdraw
+	dec := json.NewDecoder(r.Body)
+	if err := dec.Decode(&withdraw); err != nil {
+		http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	fmt.Println(withdraw)
+
+	balance, err := h.service.Storage.GetBalance(r.Context(), userID)
+	if err != nil && !errors.Is(err, internal.ErrNoRows) {
+		http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if balance.Current < withdraw.Sum {
+		rw.WriteHeader(http.StatusPaymentRequired)
+		return
+	}
+
+	if !h.service.ValidLuhn(withdraw.Order) {
+		http.Error(rw, "Invalid format of order number", http.StatusUnprocessableEntity)
+		return
+	}
+
+	err = h.service.Storage.PostWithdraw(r.Context(), userID, withdraw)
+	if err != nil {
+		http.Error(rw, "Invalid format of order number", http.StatusUnprocessableEntity)
+		return
+	}
+}
+
+func (h *GophermartHandler) GetWithdrawals(rw http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(internal.UserIDKey).(string)
+	withdrawals, err := h.service.Storage.GetWithdrawals(r.Context(), userID)
+	if err != nil {
+		http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if len(withdrawals) == 0 {
+		rw.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	enc := json.NewEncoder(rw)
+	if err := enc.Encode(withdrawals); err != nil {
+		http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (h *GophermartHandler) GetOrderByNumber(rw http.ResponseWriter, r *http.Request) {
+	number := chi.URLParam(r, "number")
+
+	order, err := h.service.Storage.GetOrder(r.Context(), number)
+	if err != nil {
+		if errors.Is(err, internal.ErrNoRows) {
+			rw.WriteHeader(http.StatusNoContent)
+			return
+		}
+		http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	enc := json.NewEncoder(rw)
+	if err := enc.Encode(order); err != nil {
+		http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
