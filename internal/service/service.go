@@ -112,7 +112,7 @@ func (s *Service) ValidLuhn(number string) bool {
 }
 
 func (s *Service) UpdateOrderStatus() error {
-	ticker := time.NewTicker(5*time.Second)
+	ticker := time.NewTicker(15*time.Second)
 	defer ticker.Stop()
 
 	tasks := make(chan model.Order, 100)
