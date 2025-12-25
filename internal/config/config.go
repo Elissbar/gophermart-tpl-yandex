@@ -23,7 +23,7 @@ func NewConfig() (*Config, error) {
 
 	var runAddr, dbURI, accrualAddr, jwtSecret string
 	flag.StringVar(&runAddr, "a", "localhost:8081", "<domain>:<port>")
-	flag.StringVar(&accrualAddr, "r", "localhost:8080", "<domain>:<port>")
+	flag.StringVar(&accrualAddr, "r", "http://localhost:8080", "<domain>:<port>")
 	flag.StringVar(&jwtSecret, "s", "jwt secret", "")
 	// flag.StringVar(&dbURI, "d", "", "Database connection string")
 	flag.StringVar(&dbURI, "d", "postgres://postgres:12345@localhost:5432/gophermart?sslmode=disable", "Database connection string")

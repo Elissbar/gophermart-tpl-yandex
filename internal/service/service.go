@@ -151,7 +151,7 @@ func (s *Service) worker(tasks <-chan model.Order) {
 		client := resty.New()
 		resp, err := client.R().
 			SetResult(&result).
-			Get("http://"+s.Config.AccrualAddr+"/api/orders/"+order.Number)
+			Get(s.Config.AccrualAddr+"/api/orders/"+order.Number)
 		
 		fmt.Println("Status Code:", resp.StatusCode())
 		fmt.Println("Resp:", resp)
