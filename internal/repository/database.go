@@ -61,19 +61,8 @@ func Migrate(db *sql.DB) error {
 }
 
 func (db *DBStorage) RegisterUser(ctx context.Context, user model.User) (string, error) {
-	tx, err := db.DB.BeginTx(ctx, nil)
-	if err != nil {
-		return "", fmt.Errorf("error begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-
 	var userID string
-	err = tx.QueryRowContext(
-		ctx, 
-		"INSERT INTO users (login, password_hash) VALUES ($1, $2) RETURNING id", 
-		user.Login, user.Password,
-	).Scan(&userID)
-
+	err := db.DB.QueryRowContext(ctx, "INSERT INTO users (login, password_hash) VALUES ($1, $2) RETURNING id", user.Login, user.Password).Scan(&userID)
 	if err != nil {
 		var pgErr *pq.Error
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
@@ -81,6 +70,28 @@ func (db *DBStorage) RegisterUser(ctx context.Context, user model.User) (string,
 		}
 		return "", fmt.Errorf("error register user: %w", err)
 	}
+	return userID, nil
+
+	// tx, err := db.DB.BeginTx(ctx, nil)
+	// if err != nil {
+	// 	return "", fmt.Errorf("error begin transaction: %w", err)
+	// }
+	// defer tx.Rollback()
+
+	// var userID string
+	// err = tx.QueryRowContext(
+	// 	ctx, 
+	// 	"INSERT INTO users (login, password_hash) VALUES ($1, $2) RETURNING id", 
+	// 	user.Login, user.Password,
+	// ).Scan(&userID)
+
+	// if err != nil {
+	// 	var pgErr *pq.Error
+	// 	if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+	// 		return "", internal.ErrLoginExists
+	// 	}
+	// 	return "", fmt.Errorf("error register user: %w", err)
+	// }
 
 	// _, err = tx.ExecContext(
 	// 	ctx,
@@ -90,7 +101,7 @@ func (db *DBStorage) RegisterUser(ctx context.Context, user model.User) (string,
 	// if err != nil {
 	// 	return "", fmt.Errorf("error create balance in DB: %w", err)
 	// }
-	return userID, nil
+	// return userID, nil
 }
 
 func (db *DBStorage) GetUser(ctx context.Context, login string) (*model.User, error) {
