@@ -61,14 +61,34 @@ func Migrate(db *sql.DB) error {
 }
 
 func (db *DBStorage) RegisterUser(ctx context.Context, user model.User) (string, error) {
+	tx, err := db.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return "", fmt.Errorf("error begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
 	var userID string
-	err := db.DB.QueryRowContext(ctx, "INSERT INTO users (login, password_hash) VALUES ($1, $2) RETURNING id", user.Login, user.Password).Scan(&userID)
+	err = tx.QueryRowContext(
+		ctx, 
+		"INSERT INTO users (login, password_hash) VALUES ($1, $2) RETURNING id", 
+		user.Login, user.Password,
+	).Scan(&userID)
+
 	if err != nil {
 		var pgErr *pq.Error
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
 			return "", internal.ErrLoginExists
 		}
 		return "", fmt.Errorf("error register user: %w", err)
+	}
+
+	_, err = tx.ExecContext(
+		ctx,
+		"INSERT INTO balances (user_id) VALUES ($1)",
+		userID,
+	)
+	if err != nil {
+		return "", fmt.Errorf("error create balance in DB: %w", err)
 	}
 	return userID, nil
 }
