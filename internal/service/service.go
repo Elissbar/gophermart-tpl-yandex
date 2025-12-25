@@ -1,19 +1,23 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"gophermart/internal"
 	"gophermart/internal/config"
+	"gophermart/internal/model"
 	"gophermart/internal/repository"
 	"net/http"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
+	"github.com/go-resty/resty/v2"
 )
 
 type Service struct {
-	Storage repository.Storage
+	Storage *repository.DBStorage // repository.Storage
 	Config  *config.Config
 	Logger  *zap.SugaredLogger
 }
@@ -105,4 +109,69 @@ func (s *Service) ValidLuhn(number string) bool {
 	}
 
 	return sum%10 == 0
+}
+
+func (s *Service) UpdateOrderStatus() error {
+	ticker := time.NewTicker(5*time.Second)
+	defer ticker.Stop()
+
+	tasks := make(chan model.Order, 100)
+
+	// Start workers
+	for i := 0; i < 5; i++ {
+		go s.worker(tasks)
+	}
+	defer close(tasks)
+
+	for range ticker.C {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+
+		query := "SELECT user_id, number, status, accrual, uploaded_at FROM orders WHERE status in ('NEW', 'PROCESSING')"
+		orders, err := s.Storage.GetAllOrders(ctx, query)
+		cancel()
+		if err != nil {
+			return err
+		}
+
+		for _, order := range orders {
+			select {
+			case tasks <- order:
+			default:
+                s.Logger.Warnf("Tasks channel full, skipping order %s", order.Number)
+			}
+		}
+	}
+	return nil
+}
+
+func (s *Service) worker(tasks <-chan model.Order) {
+	for order := range tasks {
+		var result model.Order 
+
+		client := resty.New()
+		resp, err := client.R().
+			SetResult(&result).
+			Get("http://"+s.Config.AccrualAddr+"/api/orders/"+order.Number)
+		
+		fmt.Println("Status Code:", resp.StatusCode())
+		fmt.Println("Resp:", resp)
+		fmt.Println("Result:", result)
+		fmt.Println("Order Status:", result.Status)
+
+		if err != nil {
+			s.Logger.Warnf("API error for order %s: %v", order.Number, err)
+			return
+		}
+		
+		if resp.StatusCode() == 200 && order.Status != result.Status {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+        	defer cancel()
+
+			if err := s.Storage.UpdateOrderStatus(ctx, order.ID, result); err != nil {
+				s.Logger.Errorf("Failed to update order %s: %v", order.Number, err)
+			} else {
+				s.Logger.Infof("Order %s updated to %s", order.Number, result.Status)
+			}
+		}
+	}
 }

@@ -46,8 +46,6 @@ func (h *GophermartHandler) Router() chi.Router {
 		r.Get("/withdrawals", h.GetWithdrawals)
 	})
 
-	r.Get("/api/orders/{number}", h.GetOrderByNumber)
-
 	return r
 }
 
@@ -161,9 +159,11 @@ func (h *GophermartHandler) UploadOrderNumber(rw http.ResponseWriter, r *http.Re
 }
 
 func (h *GophermartHandler) GetOrders(rw http.ResponseWriter, r *http.Request) {
+	fmt.Print("handler GetOrders")
+
 	userID := r.Context().Value(internal.UserIDKey).(string)
 
-	orders, err := h.service.Storage.GetOrders(r.Context(), userID)
+	orders, err := h.service.Storage.GetUserOrders(r.Context(), userID)
 	if err != nil {
 		http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -206,7 +206,6 @@ func (h *GophermartHandler) PostWithdraw(rw http.ResponseWriter, r *http.Request
 		http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	fmt.Println(withdraw)
 
 	balance, err := h.service.Storage.GetBalance(r.Context(), userID)
 	if err != nil && !errors.Is(err, internal.ErrNoRows) {
@@ -246,26 +245,6 @@ func (h *GophermartHandler) GetWithdrawals(rw http.ResponseWriter, r *http.Reque
 
 	enc := json.NewEncoder(rw)
 	if err := enc.Encode(withdrawals); err != nil {
-		http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-}
-
-func (h *GophermartHandler) GetOrderByNumber(rw http.ResponseWriter, r *http.Request) {
-	number := chi.URLParam(r, "number")
-
-	order, err := h.service.Storage.GetOrder(r.Context(), number)
-	if err != nil {
-		if errors.Is(err, internal.ErrNoRows) {
-			rw.WriteHeader(http.StatusNoContent)
-			return
-		}
-		http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	enc := json.NewEncoder(rw)
-	if err := enc.Encode(order); err != nil {
 		http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}

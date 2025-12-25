@@ -28,5 +28,10 @@ func Setup() (*service.Service, error) {
 		Config:  cfg,
 		Logger:  log,
 	}
+	go func() {
+		if err := srvc.UpdateOrderStatus(); err != nil {
+			log.Infof("Order processor stopped with error: %v", err)
+		}
+	}()
 	return &srvc, nil
 }

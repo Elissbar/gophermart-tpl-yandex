@@ -107,11 +107,13 @@ func (db *DBStorage) UploadNumber(ctx context.Context, userID string, number str
 	return nil
 }
 
-func (db *DBStorage) GetOrders(ctx context.Context, userID string) ([]model.Order, error) {
+func (db *DBStorage) GetUserOrders(ctx context.Context, userID string) ([]model.Order, error) {
+	fmt.Println("DB GetOrders")
+
 	rows, err := db.DB.QueryContext(
-		ctx, 
+		ctx,
 		"SELECT number, status, accrual, uploaded_at FROM orders WHERE user_id = $1 ORDER BY uploaded_at DESC",
-        userID,
+		userID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error get orders from DB: %w", err)
@@ -137,19 +139,6 @@ func (db *DBStorage) GetOrders(ctx context.Context, userID string) ([]model.Orde
 	return orders, nil
 }
 
-func (db *DBStorage) GetOrder(ctx context.Context, number string) (*model.Order, error) {
-	row := db.DB.QueryRowContext(ctx, "SELECT number, status, accrual FROM orders WHERE number=$1", number)
-
-	var order model.Order
-	if err := row.Scan(&order.Number, &order.Status, &order.Accrual); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, internal.ErrNoRows
-		}
-		return nil, fmt.Errorf("error get order from DB: %w", err)
-	}
-	return &order, nil
-}
-
 func (db *DBStorage) GetBalance(ctx context.Context, userID string) (model.Balance, error) {
 	row := db.DB.QueryRowContext(ctx, "SELECT current, withdrawn FROM balances WHERE user_id=$1", userID)
 
@@ -165,22 +154,38 @@ func (db *DBStorage) GetBalance(ctx context.Context, userID string) (model.Balan
 }
 
 func (db *DBStorage) PostWithdraw(ctx context.Context, userID string, withdraw model.Withdraw) error {
-	_, err := db.DB.ExecContext(
-		ctx, 
-		"INSERT INTO withdrawals (user_id, order_number, sum) VALUES ($1, $2, $3)", 
+	tx, err := db.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	_, err = tx.ExecContext(
+		ctx,
+		"INSERT INTO withdrawals (user_id, order_number, sum) VALUES ($1, $2, $3)",
 		userID, withdraw.Order, withdraw.Sum,
 	)
 	if err != nil {
 		return fmt.Errorf("error insert withdraw to DB: %w", err)
 	}
+
+	_, err = tx.ExecContext(
+		ctx, 
+		"UPDATE balances SET current = current - $1 WHERE user_id = $2", 
+		withdraw.Sum, userID,
+	)
+	if err != nil {
+		return fmt.Errorf("error update balance in DB: %w", err)
+	}
+
 	return nil
 }
 
 func (db *DBStorage) GetWithdrawals(ctx context.Context, userID string) ([]model.Withdraw, error) {
 	rows, err := db.DB.QueryContext(
-		ctx, 
+		ctx,
 		"SELECT order_number, sum, processed_at FROM withdrawals WHERE user_id = $1 ORDER BY processed_at DESC",
-        userID,
+		userID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error get withdrawals from DB: %w", err)
@@ -203,4 +208,65 @@ func (db *DBStorage) GetWithdrawals(ctx context.Context, userID string) ([]model
 	}
 
 	return withdrawals, nil
+}
+
+func (db *DBStorage) GetAllOrders(ctx context.Context, query string) ([]model.Order, error) {
+	rows, err := db.DB.QueryContext(
+		ctx,
+		query,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error get all orders from DB: %w", err)
+	}
+	defer rows.Close()
+
+	var orders []model.Order
+	for rows.Next() {
+		var order model.Order
+
+		err = rows.Scan(
+			&order.ID,
+			&order.Number,
+			&order.Status,
+			&order.Accrual,
+			&order.UploadedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("error scan order from DB: %w", err)
+		}
+		orders = append(orders, order)
+	}
+	
+	return orders, nil
+}
+
+func (db *DBStorage) UpdateOrderStatus(ctx context.Context, userID string, result model.Order) error {
+	tx, err := db.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	_, err = tx.ExecContext(
+		ctx, 
+		"UPDATE orders SET status = $1, accrual = $2 WHERE number = $3", 
+		result.Status, result.Accrual, result.OrderNum,
+	)
+	if err != nil {
+		return fmt.Errorf("error update order status in DB: %w", err)
+	}
+
+	// Обновляем баланс пользователя
+	if result.Status == "PROCESSED" {
+		_, err = tx.ExecContext(
+			ctx, 
+			"UPDATE balances SET current = current + $1 WHERE user_id = $2", 
+			result.Accrual, userID,
+		)
+		if err != nil {
+			return fmt.Errorf("error update balance in DB: %w", err)
+		}
+	}
+
+	return tx.Commit()
 }
