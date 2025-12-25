@@ -82,14 +82,14 @@ func (db *DBStorage) RegisterUser(ctx context.Context, user model.User) (string,
 		return "", fmt.Errorf("error register user: %w", err)
 	}
 
-	_, err = tx.ExecContext(
-		ctx,
-		"INSERT INTO balances (user_id) VALUES ($1)",
-		userID,
-	)
-	if err != nil {
-		return "", fmt.Errorf("error create balance in DB: %w", err)
-	}
+	// _, err = tx.ExecContext(
+	// 	ctx,
+	// 	"INSERT INTO balances (user_id) VALUES ($1)",
+	// 	userID,
+	// )
+	// if err != nil {
+	// 	return "", fmt.Errorf("error create balance in DB: %w", err)
+	// }
 	return userID, nil
 }
 
