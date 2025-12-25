@@ -194,7 +194,7 @@ func (db *DBStorage) PostWithdraw(ctx context.Context, userID string, withdraw m
 		return fmt.Errorf("error update balance in DB: %w", err)
 	}
 
-	return nil
+	return tx.Commit()
 }
 
 func (db *DBStorage) GetWithdrawals(ctx context.Context, userID string) ([]model.Withdraw, error) {
