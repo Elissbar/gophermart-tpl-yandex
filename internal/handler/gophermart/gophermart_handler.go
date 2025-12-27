@@ -234,7 +234,7 @@ func (h *GophermartHandler) GetWithdrawals(rw http.ResponseWriter, r *http.Reque
 	userID := r.Context().Value(internal.UserIDKey).(string)
 	withdrawals, err := h.service.Storage.GetWithdrawals(r.Context(), userID)
 	if err != nil {
-		http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)
+		http.Error(rw, "Internal error", http.StatusInternalServerError)
 		return
 	}
 
@@ -243,6 +243,7 @@ func (h *GophermartHandler) GetWithdrawals(rw http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	rw.Header().Set("Content-Type", "application/json; charset=utf-8") // ошибка была тут, ранее не устанавливал Content-Type, надо проверить другие хендлеры
 	enc := json.NewEncoder(rw)
 	if err := enc.Encode(withdrawals); err != nil {
 		http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)

@@ -187,7 +187,7 @@ func (db *DBStorage) PostWithdraw(ctx context.Context, userID string, withdraw m
 
 	_, err = tx.ExecContext(
 		ctx, 
-		"UPDATE balances SET current = current - $1 WHERE user_id = $2", 
+		"UPDATE balances SET current = current - $1, withdrawn = withdrawn + $1 WHERE user_id = $2", 
 		withdraw.Sum, userID,
 	)
 	if err != nil {
