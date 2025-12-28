@@ -17,7 +17,7 @@ import (
 )
 
 type Service struct {
-	Storage *repository.DBStorage // repository.Storage
+	Storage *repository.DBStorage
 	Config  *config.Config
 	Logger  *zap.SugaredLogger
 }
@@ -36,22 +36,32 @@ func (s *Service) CheckHashedPass(hashedPass, pass string) bool {
 }
 
 func (s *Service) GenerateAuthToken(userID, jwtSecret string) (*http.Cookie, error) {
-	claim := internal.Claims{UserID: userID}
+	// Добавляем время жизни токена
+	expirationTime := time.Now().Add(24 * time.Hour)
+	
+	claims := internal.Claims{
+		UserID: userID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime), // Время истечения
+			IssuedAt:  jwt.NewNumericDate(time.Now()),     // Время выдачи
+			Issuer:    "gophermart",                       // Кто выдал (опционально)
+		},
+	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claim)
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString([]byte(jwtSecret))
 	if err != nil {
-		return &http.Cookie{}, fmt.Errorf("error create uuid: %w", err)
+		return nil, fmt.Errorf("error signing token: %w", err)
 	}
 
 	return &http.Cookie{
-			Name:     "user_id",
-			Value:    tokenString,
-			HttpOnly: true,
-			Path:     "/",
-			MaxAge:   24 * 60 * 60,
-		},
-		nil
+		Name:     "user_id",
+		Value:    tokenString,
+		HttpOnly: true,
+		Path:     "/",
+		MaxAge:   24 * 60 * 60, // 24 часа в секундах
+		SameSite: http.SameSiteLaxMode, // Защита от CSRF
+	}, nil
 }
 
 func (s *Service) ValidateAuthToken(tokenString, jwtSecret string) (string, error) {
@@ -76,6 +86,10 @@ func (s *Service) ValidateAuthToken(tokenString, jwtSecret string) (string, erro
 	if claims.UserID == "" {
 		fmt.Println("claims.UserID:", claims.UserID)
 		return "", fmt.Errorf("user_id is empty")
+	}
+
+	if claims.ExpiresAt != nil && claims.ExpiresAt.Time.Before(time.Now()) {
+		return "", fmt.Errorf("token expired")
 	}
 
 	return claims.UserID, nil
@@ -126,8 +140,7 @@ func (s *Service) UpdateOrderStatus() error {
 	for range ticker.C {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 
-		query := "SELECT user_id, number, status, accrual, uploaded_at FROM orders WHERE status in ('NEW', 'PROCESSING')"
-		orders, err := s.Storage.GetAllOrders(ctx, query)
+		orders, err := s.Storage.GetAllOrders(ctx)
 		cancel()
 		if err != nil {
 			return err
@@ -152,11 +165,6 @@ func (s *Service) worker(tasks <-chan model.Order) {
 		resp, err := client.R().
 			SetResult(&result).
 			Get(s.Config.AccrualAddr+"/api/orders/"+order.Number)
-		
-		fmt.Println("Status Code:", resp.StatusCode())
-		fmt.Println("Resp:", resp)
-		fmt.Println("Result:", result)
-		fmt.Println("Order Status:", result.Status)
 
 		if err != nil {
 			s.Logger.Warnf("API error for order %s: %v", order.Number, err)

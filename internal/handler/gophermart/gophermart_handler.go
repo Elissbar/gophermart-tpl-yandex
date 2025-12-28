@@ -1,9 +1,8 @@
-package gophermart_handler
+package gophermarthandler
 
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"gophermart/internal"
 	"gophermart/internal/middleware"
 	"gophermart/internal/model"
@@ -26,18 +25,16 @@ func NewGophermart(srvc *service.Service) *GophermartHandler {
 
 func (h *GophermartHandler) Router() chi.Router {
 	r := chi.NewRouter()
+	m := middleware.NewMiddleware(h.service)
+
+	r.Use(m.Logging)
 
 	r.Post("/api/user/register", h.RegisterUser)
 	r.Post("/api/user/login", h.LoginUser)
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-	})
-
-	middleware := middleware.NewMiddleware(h.service)
-
 	r.Route("/api/user", func(r chi.Router) {
-		r.Use(middleware.Auth)
+		r.Use(m.Ungzip)
+		r.Use(m.Auth)
+		r.Use(m.Gzip)
 
 		r.Post("/orders", h.UploadOrderNumber)
 		r.Get("/orders", h.GetOrders)
@@ -58,6 +55,8 @@ func (h *GophermartHandler) RegisterUser(rw http.ResponseWriter, r *http.Request
 		http.Error(rw, "Error: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	h.service.Logger.Info("Register user: %w", user.Login)
 
 	hashedPass, err := h.service.CalcPassHash(user.Password)
 	if err != nil {
@@ -96,7 +95,9 @@ func (h *GophermartHandler) LoginUser(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existedUser, err := h.service.Storage.GetUser(r.Context(), user.Login)
+	h.service.Logger.Info("Login user: %w", user.Login)
+
+	existedUser, err := h.service.Storage.LoginUser(r.Context(), user.Login)
 	if err != nil {
 		if errors.Is(err, internal.ErrUserNotFound) {
 			rw.WriteHeader(http.StatusUnauthorized)
@@ -159,8 +160,6 @@ func (h *GophermartHandler) UploadOrderNumber(rw http.ResponseWriter, r *http.Re
 }
 
 func (h *GophermartHandler) GetOrders(rw http.ResponseWriter, r *http.Request) {
-	fmt.Print("handler GetOrders")
-
 	userID := r.Context().Value(internal.UserIDKey).(string)
 
 	orders, err := h.service.Storage.GetUserOrders(r.Context(), userID)
@@ -184,6 +183,7 @@ func (h *GophermartHandler) GetOrders(rw http.ResponseWriter, r *http.Request) {
 
 func (h *GophermartHandler) GetBalance(rw http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value(internal.UserIDKey).(string)
+
 	balance, err := h.service.Storage.GetBalance(r.Context(), userID)
 	if err == nil || errors.Is(err, internal.ErrNoRows) {
 		rw.Header().Set("Content-Type", "application/json")
@@ -232,6 +232,7 @@ func (h *GophermartHandler) PostWithdraw(rw http.ResponseWriter, r *http.Request
 
 func (h *GophermartHandler) GetWithdrawals(rw http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value(internal.UserIDKey).(string)
+
 	withdrawals, err := h.service.Storage.GetWithdrawals(r.Context(), userID)
 	if err != nil {
 		http.Error(rw, "Internal error", http.StatusInternalServerError)
@@ -243,7 +244,7 @@ func (h *GophermartHandler) GetWithdrawals(rw http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	rw.Header().Set("Content-Type", "application/json; charset=utf-8") // ошибка была тут, ранее не устанавливал Content-Type, надо проверить другие хендлеры
+	rw.Header().Set("Content-Type", "application/json; charset=utf-8")
 	enc := json.NewEncoder(rw)
 	if err := enc.Encode(withdrawals); err != nil {
 		http.Error(rw, "Error: "+err.Error(), http.StatusInternalServerError)

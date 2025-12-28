@@ -10,6 +10,7 @@ import (
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
+	"go.uber.org/zap"
 
 	"github.com/jackc/pgerrcode"
 
@@ -18,10 +19,11 @@ import (
 )
 
 type DBStorage struct {
-	DB *sql.DB
+	DB     *sql.DB
+	logger *zap.SugaredLogger
 }
 
-func NewDatabaseStorage(connectionData string) (*DBStorage, error) {
+func NewDatabaseStorage(connectionData string, logger *zap.SugaredLogger) (*DBStorage, error) {
 	db, err := sql.Open("postgres", connectionData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
@@ -30,12 +32,14 @@ func NewDatabaseStorage(connectionData string) (*DBStorage, error) {
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
+	logger.Info("DB connection success")
 	// применяем миграции
 	if err := Migrate(db); err != nil {
 		return nil, fmt.Errorf("failed to migrate: %w", err)
 	}
+	logger.Info("Migrations applied successfully")
 
-	return &DBStorage{DB: db}, nil
+	return &DBStorage{DB: db, logger: logger}, nil
 }
 
 func Migrate(db *sql.DB) error {
@@ -85,11 +89,11 @@ func (db *DBStorage) RegisterUser(ctx context.Context, user model.User) (string,
 	if err != nil {
 		return "", fmt.Errorf("error create balance in DB: %w", err)
 	}
-	
+
 	return userID, tx.Commit()
 }
 
-func (db *DBStorage) GetUser(ctx context.Context, login string) (*model.User, error) {
+func (db *DBStorage) LoginUser(ctx context.Context, login string) (*model.User, error) {
 	row := db.DB.QueryRowContext(ctx, "SELECT id, login, password_hash FROM users WHERE login=$1", login)
 	var existedUser model.User
 
@@ -124,8 +128,6 @@ func (db *DBStorage) UploadNumber(ctx context.Context, userID string, number str
 }
 
 func (db *DBStorage) GetUserOrders(ctx context.Context, userID string) ([]model.Order, error) {
-	fmt.Println("DB GetOrders")
-
 	rows, err := db.DB.QueryContext(
 		ctx,
 		"SELECT number, status, accrual, uploaded_at FROM orders WHERE user_id = $1 ORDER BY uploaded_at DESC",
@@ -150,6 +152,10 @@ func (db *DBStorage) GetUserOrders(ctx context.Context, userID string) ([]model.
 			return nil, fmt.Errorf("error scan order from DB: %w", err)
 		}
 		orders = append(orders, order)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", err)
 	}
 
 	return orders, nil
@@ -186,8 +192,8 @@ func (db *DBStorage) PostWithdraw(ctx context.Context, userID string, withdraw m
 	}
 
 	_, err = tx.ExecContext(
-		ctx, 
-		"UPDATE balances SET current = current - $1, withdrawn = withdrawn + $1 WHERE user_id = $2", 
+		ctx,
+		"UPDATE balances SET current = current - $1, withdrawn = withdrawn + $1 WHERE user_id = $2",
 		withdraw.Sum, userID,
 	)
 	if err != nil {
@@ -223,13 +229,17 @@ func (db *DBStorage) GetWithdrawals(ctx context.Context, userID string) ([]model
 		withdrawals = append(withdrawals, withdrawn)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", err)
+	}
+
 	return withdrawals, nil
 }
 
-func (db *DBStorage) GetAllOrders(ctx context.Context, query string) ([]model.Order, error) {
+func (db *DBStorage) GetAllOrders(ctx context.Context) ([]model.Order, error) {
 	rows, err := db.DB.QueryContext(
 		ctx,
-		query,
+		"SELECT user_id, number, status, accrual, uploaded_at FROM orders WHERE status in ('NEW', 'PROCESSING')",
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error get all orders from DB: %w", err)
@@ -252,7 +262,11 @@ func (db *DBStorage) GetAllOrders(ctx context.Context, query string) ([]model.Or
 		}
 		orders = append(orders, order)
 	}
-	
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", err)
+	}
+
 	return orders, nil
 }
 
@@ -264,8 +278,8 @@ func (db *DBStorage) UpdateOrderStatus(ctx context.Context, userID string, resul
 	defer tx.Rollback()
 
 	_, err = tx.ExecContext(
-		ctx, 
-		"UPDATE orders SET status = $1, accrual = $2 WHERE number = $3", 
+		ctx,
+		"UPDATE orders SET status = $1, accrual = $2 WHERE number = $3",
 		result.Status, result.Accrual, result.OrderNum,
 	)
 	if err != nil {
@@ -275,8 +289,8 @@ func (db *DBStorage) UpdateOrderStatus(ctx context.Context, userID string, resul
 	// Обновляем баланс пользователя
 	if result.Status == "PROCESSED" {
 		_, err = tx.ExecContext(
-			ctx, 
-			"UPDATE balances SET current = current + $1 WHERE user_id = $2", 
+			ctx,
+			"UPDATE balances SET current = current + $1 WHERE user_id = $2",
 			result.Accrual, userID,
 		)
 		if err != nil {
