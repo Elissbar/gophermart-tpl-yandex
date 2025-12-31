@@ -146,7 +146,7 @@ func (s *Service) UpdateOrderStatus() error {
 			return err
 		}
 
-		for _, order := range orders {
+		for _, order := range *orders {
 			select {
 			case tasks <- order:
 			default:

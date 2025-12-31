@@ -19,8 +19,12 @@ import (
 )
 
 type DBStorage struct {
-	DB     *sql.DB
-	logger *zap.SugaredLogger
+	DB              *sql.DB
+	logger          *zap.SugaredLogger
+	ordersRepo      *Repository[model.Order]
+	withdrawalsRepo *Repository[model.Withdraw]
+	balancesRepo    *Repository[model.Balance]
+	loginRepo       *Repository[model.User]
 }
 
 func NewDatabaseStorage(connectionData string, logger *zap.SugaredLogger) (*DBStorage, error) {
@@ -39,7 +43,14 @@ func NewDatabaseStorage(connectionData string, logger *zap.SugaredLogger) (*DBSt
 	}
 	logger.Info("Migrations applied successfully")
 
-	return &DBStorage{DB: db, logger: logger}, nil
+	return &DBStorage{
+		DB:              db,
+		logger:          logger,
+		ordersRepo:      &Repository[model.Order]{DB: db, Table: "orders"},
+		withdrawalsRepo: &Repository[model.Withdraw]{DB: db, Table: "withdrawals"},
+		balancesRepo:    &Repository[model.Balance]{DB: db, Table: "balances"},
+		loginRepo:       &Repository[model.User]{DB: db, Table: "users"},
+	}, nil
 }
 
 func Migrate(db *sql.DB) error {
@@ -93,19 +104,6 @@ func (db *DBStorage) RegisterUser(ctx context.Context, user model.User) (string,
 	return userID, tx.Commit()
 }
 
-func (db *DBStorage) LoginUser(ctx context.Context, login string) (*model.User, error) {
-	row := db.DB.QueryRowContext(ctx, "SELECT id, login, password_hash FROM users WHERE login=$1", login)
-	var existedUser model.User
-
-	if err := row.Scan(&existedUser.ID, &existedUser.Login, &existedUser.Password); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, internal.ErrUserNotFound
-		}
-		return nil, fmt.Errorf("error get user from DB: %w", err)
-	}
-	return &existedUser, nil
-}
-
 func (db *DBStorage) UploadNumber(ctx context.Context, userID string, number string) error {
 	var existingUserID string
 	err := db.DB.QueryRowContext(ctx, "SELECT user_id FROM orders WHERE number=$1", number).Scan(&existingUserID)
@@ -125,54 +123,6 @@ func (db *DBStorage) UploadNumber(ctx context.Context, userID string, number str
 		return fmt.Errorf("error upload number to DB: %w", err)
 	}
 	return nil
-}
-
-func (db *DBStorage) GetUserOrders(ctx context.Context, userID string) ([]model.Order, error) {
-	rows, err := db.DB.QueryContext(
-		ctx,
-		"SELECT number, status, accrual, uploaded_at FROM orders WHERE user_id = $1 ORDER BY uploaded_at DESC",
-		userID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("error get orders from DB: %w", err)
-	}
-	defer rows.Close()
-
-	var orders []model.Order
-	for rows.Next() {
-		var order model.Order
-
-		err = rows.Scan(
-			&order.Number,
-			&order.Status,
-			&order.Accrual,
-			&order.UploadedAt,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("error scan order from DB: %w", err)
-		}
-		orders = append(orders, order)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating rows: %w", err)
-	}
-
-	return orders, nil
-}
-
-func (db *DBStorage) GetBalance(ctx context.Context, userID string) (model.Balance, error) {
-	row := db.DB.QueryRowContext(ctx, "SELECT current, withdrawn FROM balances WHERE user_id=$1", userID)
-
-	var balance model.Balance
-	if err := row.Scan(&balance.Current, &balance.Withdrawn); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return model.Balance{}, internal.ErrNoRows
-		}
-		return model.Balance{}, fmt.Errorf("error get balance from DB: %w", err)
-	}
-
-	return balance, nil
 }
 
 func (db *DBStorage) PostWithdraw(ctx context.Context, userID string, withdraw model.Withdraw) error {
@@ -201,73 +151,6 @@ func (db *DBStorage) PostWithdraw(ctx context.Context, userID string, withdraw m
 	}
 
 	return tx.Commit()
-}
-
-func (db *DBStorage) GetWithdrawals(ctx context.Context, userID string) ([]model.Withdraw, error) {
-	rows, err := db.DB.QueryContext(
-		ctx,
-		"SELECT order_number, sum, processed_at FROM withdrawals WHERE user_id = $1 ORDER BY processed_at DESC",
-		userID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("error get withdrawals from DB: %w", err)
-	}
-	defer rows.Close()
-
-	var withdrawals []model.Withdraw
-	for rows.Next() {
-		var withdrawn model.Withdraw
-
-		err = rows.Scan(
-			&withdrawn.Order,
-			&withdrawn.Sum,
-			&withdrawn.ProcessedAt,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("error scan withdrawn from DB: %w", err)
-		}
-		withdrawals = append(withdrawals, withdrawn)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating rows: %w", err)
-	}
-
-	return withdrawals, nil
-}
-
-func (db *DBStorage) GetAllOrders(ctx context.Context) ([]model.Order, error) {
-	rows, err := db.DB.QueryContext(
-		ctx,
-		"SELECT user_id, number, status, accrual, uploaded_at FROM orders WHERE status in ('NEW', 'PROCESSING')",
-	)
-	if err != nil {
-		return nil, fmt.Errorf("error get all orders from DB: %w", err)
-	}
-	defer rows.Close()
-
-	var orders []model.Order
-	for rows.Next() {
-		var order model.Order
-
-		err = rows.Scan(
-			&order.ID,
-			&order.Number,
-			&order.Status,
-			&order.Accrual,
-			&order.UploadedAt,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("error scan order from DB: %w", err)
-		}
-		orders = append(orders, order)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating rows: %w", err)
-	}
-
-	return orders, nil
 }
 
 func (db *DBStorage) UpdateOrderStatus(ctx context.Context, userID string, result model.Order) error {
@@ -299,4 +182,49 @@ func (db *DBStorage) UpdateOrderStatus(ctx context.Context, userID string, resul
 	}
 
 	return tx.Commit()
+}
+
+func (db *DBStorage) GetUser(ctx context.Context, login string) (*model.User, error) {
+	return db.loginRepo.GetOneRow(
+		ctx, 
+		scanUser,
+		"SELECT id, login, password_hash FROM users WHERE login=$1",
+		[]any{login},
+	)
+}
+
+func (db *DBStorage) GetUserOrders(ctx context.Context, userID string) (*[]model.Order, error) {
+	return db.ordersRepo.GetAllRows(
+		ctx,
+		scanOrders,
+		"SELECT user_id, number, status, accrual, uploaded_at FROM orders WHERE user_id = $1 ORDER BY uploaded_at DESC",
+		[]any{userID},
+	)
+}
+
+func (db *DBStorage) GetBalance(ctx context.Context, userID string) (*model.Balance, error) {
+	return db.balancesRepo.GetOneRow(
+		ctx,
+		scanBalance,
+		"SELECT current, withdrawn FROM balances WHERE user_id=$1",
+		[]any{userID},
+	)
+}
+
+func (db *DBStorage) GetWithdrawals(ctx context.Context, userID string) (*[]model.Withdraw, error) {
+	return db.withdrawalsRepo.GetAllRows(
+		ctx,
+		scanWithdrawals,
+		"SELECT order_number, sum, processed_at FROM withdrawals WHERE user_id = $1 ORDER BY processed_at DESC",
+		[]any{userID},
+	)
+}
+
+func (db *DBStorage) GetAllOrders(ctx context.Context) (*[]model.Order, error) {
+	return db.ordersRepo.GetAllRows(
+		ctx,
+		scanOrders,
+		"SELECT user_id, number, status, accrual, uploaded_at FROM orders WHERE status in ('NEW', 'PROCESSING')",
+		[]any{},
+	)
 }

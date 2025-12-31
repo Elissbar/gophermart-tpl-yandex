@@ -97,7 +97,7 @@ func (h *GophermartHandler) LoginUser(rw http.ResponseWriter, r *http.Request) {
 
 	h.service.Logger.Info("Login user: %w", user.Login)
 
-	existedUser, err := h.service.Storage.LoginUser(r.Context(), user.Login)
+	existedUser, err := h.service.Storage.GetUser(r.Context(), user.Login)
 	if err != nil {
 		if errors.Is(err, internal.ErrUserNotFound) {
 			rw.WriteHeader(http.StatusUnauthorized)
@@ -168,7 +168,7 @@ func (h *GophermartHandler) GetOrders(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(orders) == 0 {
+	if len(*orders) == 0 {
 		rw.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -239,7 +239,7 @@ func (h *GophermartHandler) GetWithdrawals(rw http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if len(withdrawals) == 0 {
+	if len(*withdrawals) == 0 {
 		rw.WriteHeader(http.StatusNoContent)
 		return
 	}
