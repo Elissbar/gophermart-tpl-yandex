@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -28,9 +29,9 @@ func main() {
 
 	httpServer := &http.Server{
 		Addr: srvc.Config.RunAddr,
-		// BaseContext: func(l net.Listener) context.Context {
-		// 	return shutdownCtx
-		// },
+		BaseContext: func(l net.Listener) context.Context {
+			return shutdownCtx
+		},
 		Handler: gophermartHandler.Router(),
 	}
 
